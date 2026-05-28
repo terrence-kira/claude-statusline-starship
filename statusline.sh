@@ -376,47 +376,23 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
         if [ "$extra_unlimited" = "true" ]; then
             extra_segment="${white}↗${reset} ${green}\$${extra_used} used${reset} ${dim}·${reset} ${green}unlimited${reset}"
         else
-            extra_pct=$(echo "$usage_data" | jq -r '.extra_usage.utilization // 0' | awk '{printf "%.0f", $1}')
             extra_limit=$(echo "$usage_data" | jq -r '.extra_usage.monthly_limit // 0' | awk '{printf "%.2f", $1/100}')
-            extra_bar=$(build_bar "$extra_pct" "$bar_width")
-            extra_pct_color=$(color_for_pct "$extra_pct")
 
             extra_reset=$(date -v+1m -v1d +"%b %-d" 2>/dev/null | tr '[:upper:]' '[:lower:]')
             if [ -z "$extra_reset" ]; then
                 extra_reset=$(date -d "$(date +%Y-%m-01) +1 month" +"%b %-d" 2>/dev/null | tr '[:upper:]' '[:lower:]')
             fi
 
-            extra_segment="${white}↗${reset} ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset} ${dim}resets ${extra_reset}${reset}"
+            extra_segment="${white}↗${reset} ${white}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
         fi
     fi
-fi
 
-# ── GSD status (only when .planning/ exists) ──────────
-gsd_line=""
-state_file="${cwd}/.planning/STATE.md"
-if [ -f "$state_file" ]; then
-    gsd_phase=$(grep -m1 '^Phase:' "$state_file" 2>/dev/null | sed 's/^Phase: *//')
-    gsd_status=$(grep -m1 '^Status:' "$state_file" 2>/dev/null | sed 's/^Status: *//')
-    gsd_progress=$(grep -m1 'Progress:' "$state_file" 2>/dev/null | grep -oE '[0-9]+%')
-
-    if [ -n "$gsd_phase" ]; then
-        gsd_line="${magenta}GSD${reset}"
-        gsd_line+=" ${white}${gsd_phase}${reset}"
-        if [ -n "$gsd_status" ]; then
-            case "$gsd_status" in
-                *[Cc]omplete*) gsd_line+=" ${green}${gsd_status}${reset}" ;;
-                *[Pp]rogress*|*[Ee]xecut*) gsd_line+=" ${orange}${gsd_status}${reset}" ;;
-                *) gsd_line+=" ${cyan}${gsd_status}${reset}" ;;
-            esac
-        fi
-        [ -n "$gsd_progress" ] && gsd_line+=" ${dim}(${gsd_progress})${reset}"
-    fi
+    [ -n "$extra_reset" ] && rate_lines+=" ${dim}resets ${extra_reset}${reset}"
 fi
 
 # ── Output ──────────────────────────────────────────────
 [ -n "$extra_segment" ] && line1+="${sep}${extra_segment}"
 printf "%b" "$line1"
-[ -n "$gsd_line" ] && printf "\n%b" "$gsd_line"
 [ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
 
 exit 0
