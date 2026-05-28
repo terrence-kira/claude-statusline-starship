@@ -19,7 +19,7 @@ Starship-flavored statusline for [Claude Code](https://github.com/anthropics/cla
 - [`jq`](https://jqlang.github.io/jq/), [`curl`](https://curl.se/), [`git`](https://git-scm.com/).
 - Claude Code recent enough to expose `effort.level` in the statusline JSON. See [`anthropics/claude-code`](https://github.com/anthropics/claude-code) for current versions.
 
-On macOS:
+On macOS (install [Homebrew](https://brew.sh) first if you don't have it — `brew` is not bundled with macOS):
 
 ```bash
 brew install jq
