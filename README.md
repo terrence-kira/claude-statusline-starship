@@ -35,6 +35,23 @@ brew install --cask font-maple-mono-nf-cn
 
 ## Install
 
+One-liner (downloads `statusline.sh`, backs up your current `~/.claude/settings.json`, then merges in the `statusLine` block):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main/install.sh | bash
+```
+
+Restart Claude Code (`exit`, then `claude`) for the new statusline to take effect.
+
+To remove:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main/uninstall.sh | bash
+```
+
+<details>
+<summary>Manual install (if you'd rather not pipe to bash)</summary>
+
 ```bash
 mkdir -p ~/.claude
 curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main/statusline.sh \
@@ -55,7 +72,9 @@ Then add the `statusLine` block to `~/.claude/settings.json`:
 }
 ```
 
-Restart Claude Code (or `/reload`) and the new statusline takes effect on the next render.
+Restart Claude Code (`exit`, then `claude`) for the new statusline to take effect.
+
+</details>
 
 ## Troubleshooting
 
