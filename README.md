@@ -1,15 +1,21 @@
 # claude-statusline-starship
 
-Starship-flavored statusline for [Claude Code](https://github.com/anthropics/claude-code). Live session effort badge with attention-gradient colors, smooth per-cell RGB gradient progress bars for 5h / weekly usage, worktree-aware path truncation, and an inline `extra` usage segment.
+Starship-flavored statusline for [Claude Code](https://github.com/anthropics/claude-code). Live session effort badge with attention-gradient colors, smooth per-cell RGB gradient progress bars for 5h / weekly usage, worktree-aware path truncation, and an inline overage-credits segment.
 
-![demo](./.github/demo.png)
+```
+Opus 4.7 │ 42% 83k/200k │ kira-plat-frontend (develop) │ ◕ high │ ↗ $12.38 used · unlimited
+
+current ══════════  34% ⟳ in 2h 39m │ weekly ══════════  85% ⟳ in 1h 39m
+```
+
+*Text-only preview; the live render adds per-cell gradient colors on the bars, a color-graded effort badge, and dim/bright contrast between filled and empty cells. A real screenshot will land in `.github/demo.png` in a follow-up commit.*
 
 ## Features
 
 - **Live session effort** — reads the live `effort.level` from the statusline JSON (`low` / `medium` / `high` / `xhigh` / `max`), color-graded along a `grey → green → yellow → orange → red` attention ramp with a circle-fill glyph progression `◔ / ◑ / ◕ / ● / ●`. Falls back to the persisted `~/.claude/settings.json` `effortLevel` when the current model does not expose live effort.
 - **Smooth gradient progress bars** — per-cell RGB interpolation along `green → yellow → orange → red`, rendered with the box-drawing `═` extender so adjacent cells tile edge-to-edge with no seams.
 - **Worktree-aware paths** — in worktree mode the redundant dirname is suppressed (it duplicates the worktree slug), the implicit `user/` prefix is stripped from the branch, and long names get a p10k-style middle ellipsis (`BRANCH_CAP=28`, `DIR_CAP=24`).
-- **Inline `extra` usage** — the `extra` credits segment sits on line 1 alongside model / context / dir / effort, instead of consuming a third row.
+- **Inline overage credits** — the API's `extra_usage` field (Anthropic's pay-as-you-go credits spent beyond the subscription quota, distinct from the 5h / weekly subscription bars) sits on line 1, marked with a `↗` arrow, alongside model / context / dir / effort. No third row.
 - **Background usage cache** — fetches `api.anthropic.com/api/oauth/usage` on a 60-second schedule from a detached subshell, so renders never block on the network; a stale lock dir is auto-reclaimed if a refresh dies before cleanup.
 - **Multi-fallback OAuth token resolution** — macOS Keychain (`Claude Code-credentials`) → `~/.claude/.credentials.json` → Linux `secret-tool`. Honors `CLAUDE_CODE_OAUTH_TOKEN` for ad-hoc overrides.
 - **Optional GSD block** — if `${cwd}/.planning/STATE.md` exists, a `GSD` line surfaces the current phase / status / progress for a personal planning workflow. Invisible otherwise.

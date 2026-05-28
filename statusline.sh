@@ -374,7 +374,7 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
         extra_used=$(echo "$usage_data" | jq -r '.extra_usage.used_credits // 0' | awk '{printf "%.2f", $1/100}')
 
         if [ "$extra_unlimited" = "true" ]; then
-            extra_segment="${white}extra${reset} ${green}\$${extra_used} used${reset} ${dim}·${reset} ${green}unlimited${reset}"
+            extra_segment="${white}↗${reset} ${green}\$${extra_used} used${reset} ${dim}·${reset} ${green}unlimited${reset}"
         else
             extra_pct=$(echo "$usage_data" | jq -r '.extra_usage.utilization // 0' | awk '{printf "%.0f", $1}')
             extra_limit=$(echo "$usage_data" | jq -r '.extra_usage.monthly_limit // 0' | awk '{printf "%.2f", $1/100}')
@@ -386,7 +386,7 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
                 extra_reset=$(date -d "$(date +%Y-%m-01) +1 month" +"%b %-d" 2>/dev/null | tr '[:upper:]' '[:lower:]')
             fi
 
-            extra_segment="${white}extra${reset} ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset} ${dim}resets ${extra_reset}${reset}"
+            extra_segment="${white}↗${reset} ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset} ${dim}resets ${extra_reset}${reset}"
         fi
     fi
 fi
