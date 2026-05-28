@@ -357,14 +357,14 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     five_hour_reset=$(format_reset_time "$five_hour_reset_iso")
     five_hour_bar=$(build_bar "$five_hour_pct" "$bar_width")
     five_hour_pct_color=$(color_for_pct "$five_hour_pct")
-    five_hour_pct_fmt=$(printf "%3d" "$five_hour_pct")
+    five_hour_pct_fmt=$(printf "%d" "$five_hour_pct")
 
     seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
     seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
     seven_day_reset=$(format_reset_time "$seven_day_reset_iso")
     seven_day_bar=$(build_bar "$seven_day_pct" "$bar_width")
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
-    seven_day_pct_fmt=$(printf "%3d" "$seven_day_pct")
+    seven_day_pct_fmt=$(printf "%d" "$seven_day_pct")
 
     rate_lines+="${white}current${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset} ${dim}⟳${reset} ${white}${five_hour_reset}${reset}"
     rate_lines+="${sep}"
