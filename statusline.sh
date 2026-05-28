@@ -208,14 +208,26 @@ line1+="${pct_color}${pct_used}%${reset} ${dim}${used_tokens}/${total_tokens}${r
 line1+="${sep}"
 # Dir/branch segment. In worktree mode dirname == worktree slug (the basename
 # of .worktrees/<user>/<scope>) and the branch is <user>/<scope>, so the
-# slug would appear twice; we drop the dirname and strip the implicit user/
+# slug would appear twice; we replace the dirname with the MAIN repo name
+# (derived from the worktree's common .git dir — its parent IS the main
+# checkout, so basename gives the repo name) and strip the implicit user/
 # prefix from the branch. Long names get middle-ellipsis truncation so the
 # head and tail (issue ID, last word) stay recognizable.
 DIR_CAP=24
 BRANCH_CAP=28
 if [ -n "$git_worktree" ] && [ -n "$git_branch" ]; then
+    main_repo=""
+    common_git=$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null)
+    if [ -n "$common_git" ]; then
+        case "$common_git" in
+            /*) ;;
+            *) common_git="$cwd/$common_git" ;;
+        esac
+        main_repo=$(basename "$(dirname "$common_git")")
+    fi
+    [ -z "$main_repo" ] && main_repo="$dirname"
     display_branch="${git_branch#*/}"
-    line1+="${magenta}⎇ $(truncate_middle "$display_branch" "$BRANCH_CAP")${red}${git_dirty}${magenta}${reset}"
+    line1+="${cyan}$(truncate_middle "$main_repo" "$DIR_CAP")${reset} ${magenta}⎇ $(truncate_middle "$display_branch" "$BRANCH_CAP")${red}${git_dirty}${magenta}${reset}"
 elif [ -n "$git_branch" ]; then
     line1+="${cyan}$(truncate_middle "$dirname" "$DIR_CAP")${reset}"
     line1+=" ${green}($(truncate_middle "$git_branch" "$BRANCH_CAP")${red}${git_dirty}${green})${reset}"
