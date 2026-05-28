@@ -1,6 +1,8 @@
-# claude-statusline-starship
+# claude-statusline
 
-Starship-flavored statusline for [Claude Code](https://github.com/anthropics/claude-code). Live session effort badge with attention-gradient colors, smooth per-cell RGB gradient progress bars for 5h / weekly usage, worktree-aware path truncation, and an inline overage-credits segment.
+A statusline for [Claude Code](https://github.com/anthropics/claude-code) with a color-graded live session effort badge, smooth per-cell RGB gradient progress bars for 5h / weekly usage, worktree-aware path truncation, and an inline overage-credits segment.
+
+Pure bash + `jq` + `curl`. Doesn't require any particular shell or prompt tool — runs the same under zsh, bash, fish, Ghostty, iTerm, Terminal.app, anything that hosts Claude Code.
 
 ![demo](./.github/demo.png)
 
@@ -12,7 +14,6 @@ Starship-flavored statusline for [Claude Code](https://github.com/anthropics/cla
 - **Inline overage credits** — the API's `extra_usage` field (Anthropic's pay-as-you-go credits spent beyond the subscription quota, distinct from the 5h / weekly subscription bars) sits on line 1, marked with a `↗` arrow, alongside model / context / dir / effort. No third row.
 - **Background usage cache** — fetches `api.anthropic.com/api/oauth/usage` on a 60-second schedule from a detached subshell, so renders never block on the network; a stale lock dir is auto-reclaimed if a refresh dies before cleanup.
 - **Multi-fallback OAuth token resolution** — macOS Keychain (`Claude Code-credentials`) → `~/.claude/.credentials.json` → Linux `secret-tool`. Honors `CLAUDE_CODE_OAUTH_TOKEN` for ad-hoc overrides.
-- **Optional GSD block** — if `${cwd}/.planning/STATE.md` exists, a `GSD` line surfaces the current phase / status / progress for a personal planning workflow. Invisible otherwise.
 
 ## Requirements
 
@@ -38,7 +39,7 @@ brew install --cask font-maple-mono-nf-cn
 One-liner (downloads `statusline.sh`, backs up your current `~/.claude/settings.json`, then merges in the `statusLine` block):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline/main/install.sh | bash
 ```
 
 Restart Claude Code (`exit`, then `claude`) for the new statusline to take effect.
@@ -46,7 +47,7 @@ Restart Claude Code (`exit`, then `claude`) for the new statusline to take effec
 To remove:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline/main/uninstall.sh | bash
 ```
 
 <details>
@@ -54,7 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-sta
 
 ```bash
 mkdir -p ~/.claude
-curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main/statusline.sh \
+curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline/main/statusline.sh \
   -o ~/.claude/statusline.sh
 chmod +x ~/.claude/statusline.sh
 ```

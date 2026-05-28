@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# uninstall.sh — removes claude-statusline-starship and restores settings.json
+# uninstall.sh — removes claude-statusline and restores settings.json
 
 INSTALL_DIR="$HOME/.claude"
 TARGET_SCRIPT="$INSTALL_DIR/statusline.sh"

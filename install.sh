@@ -1,13 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# install.sh — one-shot installer for claude-statusline-starship
+# install.sh — one-shot installer for claude-statusline
 #
 # Test override: set INSTALL_FROM_LOCAL=/path/to/statusline.sh to skip the
 # curl download and use a local file instead. Useful for test rigs that run
 # without network access or before a release is pushed.
 
-REPO_RAW="https://raw.githubusercontent.com/terrence-kira/claude-statusline-starship/main"
+REPO_RAW="https://raw.githubusercontent.com/terrence-kira/claude-statusline/main"
 INSTALL_DIR="$HOME/.claude"
 TARGET_SCRIPT="$INSTALL_DIR/statusline.sh"
 TARGET_SETTINGS="$INSTALL_DIR/settings.json"
