@@ -227,7 +227,7 @@ if [ -n "$git_worktree" ] && [ -n "$git_branch" ]; then
     fi
     [ -z "$main_repo" ] && main_repo="$dirname"
     display_branch="${git_branch#*/}"
-    line1+="🌳 ${cyan}$(truncate_middle "$main_repo" "$DIR_CAP")${reset} ${magenta}⎇ $(truncate_middle "$display_branch" "$BRANCH_CAP")${red}${git_dirty}${magenta}${reset}"
+    line1+="${cyan}$(truncate_middle "$main_repo" "$DIR_CAP")${reset} 🌳 ${magenta}$(truncate_middle "$display_branch" "$BRANCH_CAP")${red}${git_dirty}${reset}"
 elif [ -n "$git_branch" ]; then
     line1+="${cyan}$(truncate_middle "$dirname" "$DIR_CAP")${reset}"
     line1+=" ${green}($(truncate_middle "$git_branch" "$BRANCH_CAP")${red}${git_dirty}${green})${reset}"
