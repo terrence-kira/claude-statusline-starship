@@ -31,6 +31,14 @@ On macOS:
 brew install jq
 ```
 
+## Recommended font
+
+The statusline relies on Unicode glyphs that look best in a font with good box-drawing and Nerd Font coverage: the gradient bars use `═` (double horizontal box-drawing extender), the effort badge cycles through `◔ / ◑ / ◕ / ●`, and the dir / overage / refresh segments use `⎇`, `↗`, `⟳`, `│`. Any reasonable monospace font with full Unicode coverage works; the rendering in this repo is captured with **[Maple Mono NF CN](https://font.subf.dev/en/)** (Nerd Font + CJK variant), installable on macOS via:
+
+```bash
+brew install --cask font-maple-mono-nf-cn
+```
+
 ## Install
 
 ```bash
