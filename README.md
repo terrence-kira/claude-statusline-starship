@@ -2,13 +2,7 @@
 
 Starship-flavored statusline for [Claude Code](https://github.com/anthropics/claude-code). Live session effort badge with attention-gradient colors, smooth per-cell RGB gradient progress bars for 5h / weekly usage, worktree-aware path truncation, and an inline overage-credits segment.
 
-```
-Opus 4.7 │ 42% 83k/200k │ kira-plat-frontend (develop) │ ◕ high │ ↗ $12.38 used · unlimited
-
-current ══════════  34% ⟳ in 2h 39m │ weekly ══════════  85% ⟳ in 1h 39m
-```
-
-*Text-only preview; the live render adds per-cell gradient colors on the bars, a color-graded effort badge, and dim/bright contrast between filled and empty cells. A real screenshot will land in `.github/demo.png` in a follow-up commit.*
+![demo](./.github/demo.png)
 
 ## Features
 
