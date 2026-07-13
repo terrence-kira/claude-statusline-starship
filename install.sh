@@ -1,90 +1,68 @@
 #!/bin/bash
 set -euo pipefail
 
-# install.sh — one-shot installer for claude-statusline
-#
-# Test override: set INSTALL_FROM_LOCAL=/path/to/statusline.sh to skip the
-# curl download and use a local file instead. Useful for test rigs that run
-# without network access or before a release is pushed.
-
-REPO_RAW="https://raw.githubusercontent.com/terrence-kira/claude-statusline/main"
+REPO_RAW="https://raw.githubusercontent.com/Gaotity/claude-statusline/main"
 INSTALL_DIR="$HOME/.claude"
-TARGET_SCRIPT="$INSTALL_DIR/statusline.sh"
 TARGET_SETTINGS="$INSTALL_DIR/settings.json"
+TARGET_MAIN="$INSTALL_DIR/statusline.sh"
+TARGET_SUBAGENT="$INSTALL_DIR/subagent-statusline.sh"
+TARGET_HELPER="$INSTALL_DIR/lib/statusline-cache.sh"
+SETTINGS_BLOCK='{"statusLine":{"type":"command","command":"bash \"$HOME/.claude/statusline.sh\"","refreshInterval":30},"subagentStatusLine":{"type":"command","command":"bash \"$HOME/.claude/subagent-statusline.sh\""}}'
 
-STATUSLINE_BLOCK='{"statusLine":{"type":"command","command":"~/.claude/statusline.sh","padding":0,"refreshInterval":1000}}'
-
-# ── Dependency check ─────────────────────────────────────────────────────────
-missing=()
-command -v jq  >/dev/null 2>&1 || missing+=("jq")
-command -v curl >/dev/null 2>&1 || missing+=("curl")
-
-if [ ${#missing[@]} -gt 0 ]; then
-    echo "Error: missing required tools: ${missing[*]}"
-    echo "Install them with:  brew install ${missing[*]}"
-    exit 1
+for dependency in jq; do
+  command -v "$dependency" >/dev/null 2>&1 || { printf 'Error: missing required tool: %s\n' "$dependency" >&2; exit 1; }
+done
+if [ -z "${INSTALL_FROM_LOCAL:-}" ]; then
+  command -v curl >/dev/null 2>&1 || { printf 'Error: missing required tool: curl\n' >&2; exit 1; }
 fi
 
-# ── Download (or copy) statusline.sh ─────────────────────────────────────────
-mkdir -p "$INSTALL_DIR"
-
-tmp_script=$(mktemp)
-trap 'rm -f "$tmp_script"' EXIT
+mkdir -p "$INSTALL_DIR/lib"
+TEMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 if [ -n "${INSTALL_FROM_LOCAL:-}" ]; then
-    # Test-rig path: use a local file instead of curling from GitHub.
-    cp "$INSTALL_FROM_LOCAL" "$tmp_script"
+  LOCAL_ROOT="$(cd "$(dirname "$INSTALL_FROM_LOCAL")" && pwd)"
+  cp "$INSTALL_FROM_LOCAL" "$TEMP_DIR/statusline.sh"
+  cp "$LOCAL_ROOT/subagent-statusline.sh" "$TEMP_DIR/subagent-statusline.sh"
+  cp "$LOCAL_ROOT/lib/statusline-cache.sh" "$TEMP_DIR/statusline-cache.sh"
 else
-    curl -fsSL "$REPO_RAW/statusline.sh" -o "$tmp_script"
+  curl -fsSL "$REPO_RAW/statusline.sh" -o "$TEMP_DIR/statusline.sh"
+  curl -fsSL "$REPO_RAW/subagent-statusline.sh" -o "$TEMP_DIR/subagent-statusline.sh"
+  curl -fsSL "$REPO_RAW/lib/statusline-cache.sh" -o "$TEMP_DIR/statusline-cache.sh"
 fi
 
-# Verify the download looks like a real bash script.
-if [ ! -s "$tmp_script" ]; then
-    echo "Error: downloaded statusline.sh is empty."
-    exit 1
-fi
-head_line=$(head -1 "$tmp_script")
-if [[ "$head_line" != "#!/bin/bash"* ]]; then
-    echo "Error: downloaded file does not start with #!/bin/bash (got: $head_line)"
-    exit 1
-fi
+for script in statusline.sh subagent-statusline.sh statusline-cache.sh; do
+  [ -s "$TEMP_DIR/$script" ] || { printf 'Error: %s is empty.\n' "$script" >&2; exit 1; }
+  case "$(sed -n '1p' "$TEMP_DIR/$script")" in
+    '#!'*bash*) ;;
+    *) printf 'Error: %s is not a Bash script.\n' "$script" >&2; exit 1 ;;
+  esac
+done
 
-mv "$tmp_script" "$TARGET_SCRIPT"
-chmod +x "$TARGET_SCRIPT"
-# Disarm the trap now that we've moved the file.
-trap - EXIT
+install -m 755 "$TEMP_DIR/statusline.sh" "$TARGET_MAIN"
+install -m 755 "$TEMP_DIR/subagent-statusline.sh" "$TARGET_SUBAGENT"
+install -m 644 "$TEMP_DIR/statusline-cache.sh" "$TARGET_HELPER"
 
-# ── settings.json handling ────────────────────────────────────────────────────
-timestamp=$(date +%Y%m%dT%H%M%S)
 backup_path=""
-
 if [ -f "$TARGET_SETTINGS" ]; then
-    # Back up the existing file before touching it.
+  if ! jq -e --argjson desired "$SETTINGS_BLOCK" '
+    .statusLine == $desired.statusLine
+    and .subagentStatusLine == $desired.subagentStatusLine
+  ' "$TARGET_SETTINGS" >/dev/null 2>&1; then
+    timestamp="$(date +%Y%m%dT%H%M%S)"
     backup_path="${TARGET_SETTINGS}.${timestamp}.bak"
     cp "$TARGET_SETTINGS" "$backup_path"
-
-    # Warn if we're replacing a different statusLine command.
-    existing_command=$(jq -r '.statusLine.command // empty' "$TARGET_SETTINGS" 2>/dev/null || true)
-    new_command=$(echo "$STATUSLINE_BLOCK" | jq -r '.statusLine.command')
-    if [ -n "$existing_command" ] && [ "$existing_command" != "$new_command" ]; then
-        echo "Note: replacing existing statusLine command: $existing_command"
-    fi
-
-    # Merge: existing keys are preserved; statusLine is overwritten.
-    tmp_merged=$(mktemp)
-    jq -s '.[0] * .[1]' "$TARGET_SETTINGS" <(echo "$STATUSLINE_BLOCK") > "$tmp_merged"
-    mv "$tmp_merged" "$TARGET_SETTINGS"
+    merged="$(mktemp)"
+    jq -s '.[0] * .[1]' "$TARGET_SETTINGS" <(printf '%s\n' "$SETTINGS_BLOCK") > "$merged"
+    mv "$merged" "$TARGET_SETTINGS"
+  fi
 else
-    # No existing file — write fresh.
-    echo "$STATUSLINE_BLOCK" | jq '.' > "$TARGET_SETTINGS"
+  printf '%s\n' "$SETTINGS_BLOCK" | jq '.' > "$TARGET_SETTINGS"
 fi
 
-# ── Done ──────────────────────────────────────────────────────────────────────
-echo ""
-echo "Installed: $TARGET_SCRIPT"
-if [ -n "$backup_path" ]; then
-    echo "Backup:    $backup_path"
-fi
-echo "Settings:  $TARGET_SETTINGS"
-echo ""
-echo "Restart Claude Code (exit, then \`claude\`) for the new statusline to take effect."
+printf '\nInstalled: %s\n' "$TARGET_MAIN"
+printf 'Installed: %s\n' "$TARGET_SUBAGENT"
+printf 'Installed: %s\n' "$TARGET_HELPER"
+[ -z "$backup_path" ] || printf 'Backup:    %s\n' "$backup_path"
+printf 'Settings:  %s\n\n' "$TARGET_SETTINGS"
+printf 'Restart Claude Code (exit, then `claude`) for the status lines to take effect.\n'

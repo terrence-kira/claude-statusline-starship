@@ -8,6 +8,11 @@ if [ -z "$input" ]; then
     exit 0
 fi
 
+cache_helper="$HOME/.claude/lib/statusline-cache.sh"
+if [ -r "$cache_helper" ]; then
+    . "$cache_helper" >/dev/null 2>&1 || true
+fi
+
 # ── Colors ──────────────────────────────────────────────
 blue='\033[38;2;0;153;255m'
 orange='\033[38;2;255;176;85m'
@@ -170,11 +175,19 @@ eval "$(jq -r '
   "output_tokens="  + (.context_window.current_usage.output_tokens // 0 | tostring | @sh),
   "cwd="            + (.cwd // "" | @sh),
   "git_worktree="   + (.workspace.git_worktree // "" | @sh),
-  "effort_level="   + (.effort.level // "" | @sh)
+  "effort_level="   + (.effort.level // "" | @sh),
+  "session_id="     + (.session_id // "" | @sh)
 ' <<< "$input")"
 [ "$size" -eq 0 ] 2>/dev/null && size=200000
 
 current=$(( input_tokens + cache_create + cache_read + output_tokens ))
+
+# Hand the authoritative context usage off to hooks: hook stdin never carries
+# context_window (only the status line gets it), so the compact-reminder
+# UserPromptSubmit hook reads this per-session cache instead of recomputing.
+if declare -F claude_statusline_write_context >/dev/null 2>&1; then
+    claude_statusline_write_context "$session_id" "$pct_used" "$size" >/dev/null 2>&1 || true
+fi
 used_tokens=$(format_tokens $current)
 total_tokens=$(format_tokens $size)
 
@@ -197,7 +210,7 @@ git_branch=""
 git_dirty=""
 if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git_branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null)
-    if [ -n "$(git -C "$cwd" status --porcelain --no-optional-locks 2>/dev/null)" ]; then
+    if [ -n "$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null)" ]; then
         git_dirty="*"
     fi
 fi
@@ -244,108 +257,15 @@ case "$effort" in
     *)      line1+="${dim}◑ ${effort}${reset}" ;;
 esac
 
-# ── OAuth token resolution ──────────────────────────────
-get_oauth_token() {
-    local token=""
-
-    if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-        echo "$CLAUDE_CODE_OAUTH_TOKEN"
-        return 0
-    fi
-
-    if command -v security >/dev/null 2>&1; then
-        local blob
-        blob=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
-        if [ -n "$blob" ]; then
-            token=$(echo "$blob" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-            if [ -n "$token" ] && [ "$token" != "null" ]; then
-                echo "$token"
-                return 0
-            fi
-        fi
-    fi
-
-    local creds_file="${HOME}/.claude/.credentials.json"
-    if [ -f "$creds_file" ]; then
-        token=$(jq -r '.claudeAiOauth.accessToken // empty' "$creds_file" 2>/dev/null)
-        if [ -n "$token" ] && [ "$token" != "null" ]; then
-            echo "$token"
-            return 0
-        fi
-    fi
-
-    if command -v secret-tool >/dev/null 2>&1; then
-        local blob
-        blob=$(timeout 2 secret-tool lookup service "Claude Code-credentials" 2>/dev/null)
-        if [ -n "$blob" ]; then
-            token=$(echo "$blob" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-            if [ -n "$token" ] && [ "$token" != "null" ]; then
-                echo "$token"
-                return 0
-            fi
-        fi
-    fi
-
-    echo ""
-}
-
-# ── Fetch usage data (cached, refreshed in background) ──
-# The status line never blocks on the network: it renders whatever is in the
-# cache right now and, when the cache is stale, kicks off a detached refresh
-# for the next render. Combined with `statusLine.refreshInterval` in
-# settings.json this keeps the 5h / weekly bars current even while idle, while
-# the actual API call rate stays capped by cache_max_age regardless of how
-# often the status line is redrawn.
-cache_file="/tmp/claude/statusline-usage-cache.json"
-lock_dir="/tmp/claude/statusline-usage.lock"
-cache_max_age=60   # seconds before the cache is considered stale
-lock_max_age=30    # seconds before a crashed refresh's lock is reclaimed
-mkdir -p /tmp/claude
-
-# Fetch usage from the API and atomically replace the cache. Runs detached.
-refresh_usage_cache() {
-    local token response tmp
-    token=$(get_oauth_token)
-    if [ -n "$token" ] && [ "$token" != "null" ]; then
-        response=$(curl -s --max-time 10 \
-            -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $token" \
-            -H "anthropic-beta: oauth-2025-04-20" \
-            -H "User-Agent: claude-code/2.1.34" \
-            "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-        if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
-            tmp=$(mktemp "${cache_file}.XXXXXX" 2>/dev/null) || tmp="${cache_file}.tmp.$$"
-            printf '%s' "$response" > "$tmp" && mv -f "$tmp" "$cache_file"
-        fi
-    fi
-    rmdir "$lock_dir" 2>/dev/null
-}
-
-# Reclaim a lock left behind by a refresh that was killed before cleanup.
-if [ -d "$lock_dir" ]; then
-    lock_mtime=$(stat -c %Y "$lock_dir" 2>/dev/null || stat -f %m "$lock_dir" 2>/dev/null)
-    if [ -n "$lock_mtime" ] && [ $(( $(date +%s) - lock_mtime )) -ge "$lock_max_age" ]; then
-        rmdir "$lock_dir" 2>/dev/null
-    fi
-fi
-
-# Measure cache age (a missing cache counts as stale).
-cache_age=999999
-if [ -f "$cache_file" ]; then
-    cache_mtime=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null)
-    [ -n "$cache_mtime" ] && cache_age=$(( $(date +%s) - cache_mtime ))
-fi
-
-# When stale and no refresh is already in flight, grab the lock (atomic mkdir)
-# and refresh in a detached subshell so the render below returns immediately.
-if [ "$cache_age" -ge "$cache_max_age" ] && mkdir "$lock_dir" 2>/dev/null; then
-    ( refresh_usage_cache & ) >/dev/null 2>&1
-fi
-
-# Render with whatever the cache holds right now (never block on the network).
+# Render a stable cache snapshot and ask the helper to refresh stale data in a
+# detached process for the next invocation. Helper failure never blocks output.
 usage_data=""
-[ -f "$cache_file" ] && usage_data=$(cat "$cache_file" 2>/dev/null)
+if declare -F claude_statusline_read_usage >/dev/null 2>&1; then
+    usage_data="$(claude_statusline_read_usage 2>/dev/null)" || usage_data=""
+fi
+if declare -F claude_statusline_refresh_usage_async >/dev/null 2>&1; then
+    claude_statusline_refresh_usage_async || true
+fi
 
 # ── Rate limit lines ────────────────────────────────────
 rate_lines=""
@@ -354,41 +274,40 @@ extra_segment=""
 if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     bar_width=10
 
-    # Check if extra usage is enabled and unlimited (monthly_limit is null or 0)
-    extra_enabled=$(echo "$usage_data" | jq -r '.extra_usage.is_enabled // false')
-    extra_unlimited=false
-    if [ "$extra_enabled" = "true" ]; then
-        extra_limit_raw=$(echo "$usage_data" | jq -r '.extra_usage.monthly_limit // 0')
-        if [ "$extra_limit_raw" = "null" ] || [ "$extra_limit_raw" = "0" ]; then
-            extra_unlimited=true
-        fi
-    fi
+    # Single jq pass over the cache instead of ~10 separate jq/awk subprocesses.
+    # Percentages arrive pre-rounded; dollar amounts come through as plain
+    # numbers and are %.2f-formatted with a bash builtin below. extra_unlimited
+    # is true when extra usage is on but has no monthly cap (limit null or 0).
+    eval "$(echo "$usage_data" | jq -r '
+      "extra_enabled="       + ((.extra_usage.is_enabled // false)        | tostring | @sh),
+      "extra_unlimited="     + (((.extra_usage.monthly_limit // 0) == 0)  | tostring | @sh),
+      "five_hour_pct="       + ((.five_hour.utilization // 0)  | round | tostring | @sh),
+      "seven_day_pct="       + ((.seven_day.utilization // 0)  | round | tostring | @sh),
+      "five_hour_reset_iso=" + ((.five_hour.resets_at // "")             | @sh),
+      "seven_day_reset_iso=" + ((.seven_day.resets_at // "")            | @sh),
+      "extra_used_usd="      + ((.extra_usage.used_credits // 0)  / 100  | tostring | @sh),
+      "extra_limit_usd="     + ((.extra_usage.monthly_limit // 0) / 100  | tostring | @sh)
+    ')"
 
-    five_hour_pct=$(echo "$usage_data" | jq -r '.five_hour.utilization // 0' | awk '{printf "%.0f", $1}')
-    five_hour_reset_iso=$(echo "$usage_data" | jq -r '.five_hour.resets_at // empty')
     five_hour_reset=$(format_reset_time "$five_hour_reset_iso")
     five_hour_bar=$(build_bar "$five_hour_pct" "$bar_width")
     five_hour_pct_color=$(color_for_pct "$five_hour_pct")
-    five_hour_pct_fmt=$(printf "%d" "$five_hour_pct")
 
-    seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
-    seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
     seven_day_reset=$(format_reset_time "$seven_day_reset_iso")
     seven_day_bar=$(build_bar "$seven_day_pct" "$bar_width")
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
-    seven_day_pct_fmt=$(printf "%d" "$seven_day_pct")
 
-    rate_lines+="${white}current${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset} ${dim}⟳${reset} ${white}${five_hour_reset}${reset}"
+    rate_lines+="${white}current${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct}%${reset} ${dim}⟳${reset} ${white}${five_hour_reset}${reset}"
     rate_lines+="${sep}"
-    rate_lines+="${white}weekly${reset} ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset} ${dim}⟳${reset} ${white}${seven_day_reset}${reset}"
+    rate_lines+="${white}weekly${reset} ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct}%${reset} ${dim}⟳${reset} ${white}${seven_day_reset}${reset}"
 
     if [ "$extra_enabled" = "true" ]; then
-        extra_used=$(echo "$usage_data" | jq -r '.extra_usage.used_credits // 0' | awk '{printf "%.2f", $1/100}')
+        extra_used=$(printf "%.2f" "$extra_used_usd")
 
         if [ "$extra_unlimited" = "true" ]; then
             extra_segment="${white}↗${reset} ${green}\$${extra_used} used${reset} ${dim}·${reset} ${green}unlimited${reset}"
         else
-            extra_limit=$(echo "$usage_data" | jq -r '.extra_usage.monthly_limit // 0' | awk '{printf "%.2f", $1/100}')
+            extra_limit=$(printf "%.2f" "$extra_limit_usd")
 
             extra_reset=$(date -v+1m -v1d +"%b %-d" 2>/dev/null | tr '[:upper:]' '[:lower:]')
             if [ -z "$extra_reset" ]; then
