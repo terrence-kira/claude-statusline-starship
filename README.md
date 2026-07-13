@@ -1,91 +1,124 @@
 # claude-statusline
 
-A statusline for [Claude Code](https://github.com/anthropics/claude-code) with a color-graded live session effort badge, smooth per-cell RGB gradient progress bars for 5h / weekly usage, worktree-aware path truncation, and an inline overage-credits segment.
+A portable Claude Code status-line bundle with live context usage, subscription
+rate bars, worktree-aware paths, effort indicators, and custom subagent rows.
 
-Pure bash + `jq` + `curl`. Doesn't require any particular shell or prompt tool — runs the same under zsh, bash, fish, Ghostty, iTerm, Terminal.app, anything that hosts Claude Code.
+The bundle is pure Bash and uses `jq`, `curl`, and `git`. It is maintained
+as a publication subset of a private chezmoi dotfiles source; this repository
+contains only the files needed to install, run, test, and document the shared
+status lines.
 
 ![demo](./.github/demo.png)
 
-## Features
+## Components
 
-- **Live session effort** — reads the live `effort.level` from the statusline JSON (`low` / `medium` / `high` / `xhigh` / `max`), color-graded along a `grey → green → yellow → orange → red` attention ramp with a circle-fill glyph progression `◔ / ◑ / ◕ / ● / ●`. Falls back to the persisted `~/.claude/settings.json` `effortLevel` when the current model does not expose live effort.
-- **Smooth gradient progress bars** — per-cell RGB interpolation along `green → yellow → orange → red`, rendered with the box-drawing `═` extender so adjacent cells tile edge-to-edge with no seams.
-- **Worktree-aware paths** — in worktree mode the redundant dirname is suppressed (it duplicates the worktree slug), the implicit `user/` prefix is stripped from the branch, and long names get a p10k-style middle ellipsis (`BRANCH_CAP=28`, `DIR_CAP=24`).
-- **Inline overage credits** — the API's `extra_usage` field (Anthropic's pay-as-you-go credits spent beyond the subscription quota, distinct from the 5h / weekly subscription bars) sits on line 1, marked with a `↗` arrow, alongside model / context / dir / effort. No third row.
-- **Background usage cache** — fetches `api.anthropic.com/api/oauth/usage` on a 60-second schedule from a detached subshell, so renders never block on the network; a stale lock dir is auto-reclaimed if a refresh dies before cleanup.
-- **Multi-fallback OAuth token resolution** — macOS Keychain (`Claude Code-credentials`) → `~/.claude/.credentials.json` → Linux `secret-tool`. Honors `CLAUDE_CODE_OAUTH_TOKEN` for ad-hoc overrides.
+- `statusline.sh` renders the main Claude Code status line.
+- `subagent-statusline.sh` renders one custom row per subagent.
+- `lib/statusline-cache.sh` performs non-blocking usage refresh, credential
+  lookup, locking, and the context-usage handoff used by reminder hooks.
+
+The render path only reads local state. Network refresh runs asynchronously, so
+the prompt is never blocked by the Anthropic usage endpoint.
 
 ## Requirements
 
-- [`jq`](https://jqlang.github.io/jq/), [`curl`](https://curl.se/), [`git`](https://git-scm.com/).
-- Claude Code recent enough to expose `effort.level` in the statusline JSON. See [`anthropics/claude-code`](https://github.com/anthropics/claude-code) for current versions.
+- Bash
+- [jq](https://jqlang.github.io/jq/)
+- [curl](https://curl.se/)
+- Git
 
-On macOS (install [Homebrew](https://brew.sh) first if you don't have it — `brew` is not bundled with macOS):
+On macOS:
 
 ```bash
 brew install jq
 ```
 
-## Recommended font
-
-The statusline relies on Unicode glyphs that look best in a font with good box-drawing and Nerd Font coverage: the gradient bars use `═` (double horizontal box-drawing extender), the effort badge cycles through `◔ / ◑ / ◕ / ●`, and the dir / overage / refresh segments use `⎇`, `↗`, `⟳`, `│`. Any reasonable monospace font with full Unicode coverage works; the rendering in this repo is captured with **[Maple Mono NF CN](https://font.subf.dev/en/)** (Nerd Font + CJK variant), installable on macOS via:
-
-```bash
-brew install --cask font-maple-mono-nf-cn
-```
-
 ## Install
 
-One-liner (downloads `statusline.sh`, backs up your current `~/.claude/settings.json`, then merges in the `statusLine` block):
+The installer downloads all three components, backs up an existing
+`~/.claude/settings.json` when it needs to change it, and merges both
+`statusLine` and `subagentStatusLine`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Gaotity/claude-statusline/main/install.sh | bash
 ```
 
-Restart Claude Code (`exit`, then `claude`) for the new statusline to take effect.
+Restart Claude Code after installation.
 
-To remove:
+To uninstall:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Gaotity/claude-statusline/main/uninstall.sh | bash
 ```
 
-<details>
-<summary>Manual install (if you'd rather not pipe to bash)</summary>
+The uninstaller restores the original settings backup when available. Without a
+backup, it removes only the two status-line keys and preserves unrelated
+settings.
+
+## Manual install
 
 ```bash
-mkdir -p ~/.claude
-curl -fsSL https://raw.githubusercontent.com/terrence-kira/claude-statusline/main/statusline.sh \
-  -o ~/.claude/statusline.sh
-chmod +x ~/.claude/statusline.sh
+mkdir -p ~/.claude/lib
+curl -fsSL https://raw.githubusercontent.com/Gaotity/claude-statusline/main/statusline.sh -o ~/.claude/statusline.sh
+curl -fsSL https://raw.githubusercontent.com/Gaotity/claude-statusline/main/subagent-statusline.sh -o ~/.claude/subagent-statusline.sh
+curl -fsSL https://raw.githubusercontent.com/Gaotity/claude-statusline/main/lib/statusline-cache.sh -o ~/.claude/lib/statusline-cache.sh
+chmod +x ~/.claude/statusline.sh ~/.claude/subagent-statusline.sh
 ```
 
-Then add the `statusLine` block to `~/.claude/settings.json`:
+Add these settings to `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline.sh",
-    "padding": 0,
-    "refreshInterval": 1000
+    "command": "bash \"$HOME/.claude/statusline.sh\"",
+    "refreshInterval": 30
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "bash \"$HOME/.claude/subagent-statusline.sh\""
   }
 }
 ```
 
-Restart Claude Code (`exit`, then `claude`) for the new statusline to take effect.
+## Maintainer sync
 
-</details>
+The chezmoi source remains canonical. The maintainer command has an explicit
+read-only check mode and an explicit write mode:
 
-## Troubleshooting
+```bash
+scripts/sync-from-chezmoi.sh --check
+scripts/sync-from-chezmoi.sh --write
+```
 
-- **Rate-limit bars stay at zero.** The 5h / weekly bars require a valid Claude Code OAuth token; the script reads it from macOS Keychain, `~/.claude/.credentials.json`, or `secret-tool` in that order. If you use a non-standard credential store, export `CLAUDE_CODE_OAUTH_TOKEN` in your shell before launching Claude Code.
-- **`User-Agent` rejected by the usage endpoint.** The script sends a pinned Claude Code user-agent string against `api.anthropic.com/api/oauth/usage`. If Anthropic ever rejects stale agents, bump the version literal in `statusline.sh` to match your installed Claude Code (`claude --version`).
+Use `--source <path>` to test against a fixture or an alternate chezmoi source.
+The script reads only the three documented source files and never writes to the
+source repository.
+
+Run all repository checks before committing:
+
+```bash
+bash tests/sync-from-chezmoi.sh
+bash tests/render.smoke.sh
+bash tests/install-uninstall.sh
+```
+
+## Security
+
+No OAuth token is stored in this repository. At runtime, the cache helper checks
+`CLAUDE_CODE_OAUTH_TOKEN`, macOS Keychain, Claude Code's local credentials
+file, or Linux Secret Service. Tokens are passed to `curl` through a header on
+standard input and are never logged.
+
+Credentials, sessions, transcripts, caches, and machine-specific configuration
+are intentionally excluded.
 
 ## Credits
 
-Inspired by and originally forked from [`kamranahmedse/claude-statusline`](https://github.com/kamranahmedse/claude-statusline). The script in this repo has been substantially rewritten; the npm-distributed installer has been intentionally dropped in favor of a single auditable bash file.
+Inspired by
+[kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline).
 
 ## License
 
-[MIT](./LICENSE). Portions originally from `kamranahmedse/claude-statusline` (MIT, © Kamran Ahmed).
+[MIT](./LICENSE). Portions originally from `kamranahmedse/claude-statusline`
+(MIT, © Kamran Ahmed).
