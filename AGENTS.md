@@ -25,8 +25,9 @@ bash tests/install-uninstall.sh
 ```
 
 The sync script reads exactly three allowlisted files and never writes to
-chezmoi. Keep `.codex/`, credentials, sessions, caches, and machine-specific
-state out of Git.
+chezmoi. Track only portable model and reasoning defaults in
+`.codex/config.toml`; keep other Codex runtime state, credentials, sessions,
+caches, and machine-specific state out of Git.
 
 ## Runtime Invariants
 
