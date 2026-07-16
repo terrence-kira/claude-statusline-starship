@@ -113,6 +113,9 @@ standard input and are never logged.
 Credentials, sessions, transcripts, caches, and machine-specific configuration
 are intentionally excluded.
 
+The repository-local `.codex/config.toml` contains only portable Codex model
+and reasoning defaults. Other Codex runtime state remains excluded.
+
 ## Credits
 
 Inspired by
